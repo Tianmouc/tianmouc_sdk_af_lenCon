@@ -242,8 +242,8 @@ int main(int argc, char* argv[])
 	MoveLens(DEFAULT_IRIS);
 	printf("\nIris current address %u\n\n", irisCurrentAddr);
 
-    int SEARCH_STEP = 20;
-    int WAIT = 5;
+    int SEARCH_STEP = 100;
+    int WAIT = 15;
 
     int min_foucus = 3608;
     int max_foucus = 6050;
@@ -256,7 +256,6 @@ int main(int argc, char* argv[])
     bool ajust_once = false;
     MoveLens(min_foucus);
 	printf("\nFocus current address %u\n\n", focusCurrentAddr);
-    
 
     while(1){
         i ++;
@@ -273,8 +272,9 @@ int main(int argc, char* argv[])
                 }
             }
             ajust_once = true;
+            printf("\naim at %u\n\n", SD_peak_focus[max_val_index]);
             MoveLens(SD_peak_focus[max_val_index]);
-            break;
+            printf("\nFocus current address %u\n\n", focusCurrentAddr);
         }
 
         if(metadata.isRod==1){

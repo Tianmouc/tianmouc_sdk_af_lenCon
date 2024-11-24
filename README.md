@@ -30,3 +30,26 @@ require OS: >= ubuntu_20
 - updated version 20240906
 - fixed all bugs
 - minimum develop kit
+
+# readme for AF demo
+
+### requirements
+
+if you have already install all the support for tianmouc, you would meet the requirments
+
+
+1. libusb-1.0
+$ sudo apt-get install libusb-1.0-0-dev
+
+2. g++
+$ sudo apt-get install g++
+
+### usage
+
+1. compile the demo
+
+$ cd demo
+$ sh compile.sh
+
+2. run as sudo user
+$ sudo ./build/tianmouc_app
