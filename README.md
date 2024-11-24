@@ -2,6 +2,8 @@
 
 ## usages
 
+require OS: >= ubuntu_20
+
 ### If you have the access to the source code of tianmouc-sdk full version
 
 1. install cyusb, opencv, lib-usb-1.0-dev

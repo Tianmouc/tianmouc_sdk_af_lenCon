@@ -1,13 +1,20 @@
- #include "tianmoucv.h"
-#include "isp.h"
-#include "unistd.h"
-
 /*
 WARNING:DEV vesion.
-author: yihan lin , taoyi wang
-deeply relied on 20240106 version tianmoucsdk
+author: yihan lin 
+deeply relied on 20241124 version tianmoucsdk
 */
+#include "tianmoucv.h"
+#include "isp.h"
+#include "unistd.h"
+extern "C" {
+#include "LensConnect.h"
+#include "LensCtrl.h"
+}
 
+
+extern uint16_t focusCurrentAddr;
+extern uint16_t irisCurrentAddr;
+extern uint16_t zoomCurrentAddr;
 
 /************************************
 (1) open a camera and init camera handle
@@ -183,8 +190,6 @@ void tmExposureSet(unsigned long long cameraHandle, int rodAEtime, int coneAEtim
 }
 
 
-
-
 void IICconfig_download(unsigned long long cameraHandle, const char* IICconfigPath){
 
     try {
@@ -211,7 +216,6 @@ int main(int argc, char* argv[])
 {   //Camera handle
     tianmoucData metadata;
 
-    
     cv::Mat Ix = cv::Mat::zeros(ROD_H, ROD_W, CV_32FC1);
     cv::Mat Iy = cv::Mat::zeros(ROD_H, ROD_W, CV_32FC1);
     std::cout << "[cpp sdk]before open "  << std::endl;
@@ -226,17 +230,82 @@ int main(int argc, char* argv[])
 
     int render_gap = 5;
     int i = 0;
+
+    /*AF*/
+	int DEFAULT_ZOOM = 1000;
+	int DEFAULT_FOCUS = 4200;
+	int DEFAULT_IRIS = 10;
+    init_lens();
+
+	MoveLens(DEFAULT_ZOOM);
+	printf("\nZoom current address = %u\n\n", zoomCurrentAddr);
+	MoveLens(DEFAULT_IRIS);
+	printf("\nIris current address %u\n\n", irisCurrentAddr);
+
+    int SEARCH_STEP = 20;
+    int WAIT = 5;
+
+    int min_foucus = 3608;
+    int max_foucus = 6050;
+    int now_focus = min_foucus;
+
+    int wait_frame = WAIT;
+    std::vector<int> SD_peak_values;
+    std::vector<int> SD_peak_focus;
+    bool init_scan = true;
+    bool ajust_once = false;
+    MoveLens(min_foucus);
+	printf("\nFocus current address %u\n\n", focusCurrentAddr);
+    
+
     while(1){
         i ++;
         tmGetFrame(cameraHandle,&metadata);
         std::cout<<"[cpp sdk]frame:"<<i<<std::endl;
         std::cout<<"[cpp sdk]time:"<<metadata.timestamp<<"0us"<<std::endl;
+
+        if(!init_scan && !ajust_once){
+            int max_val_index = 0;
+            int max_val_found = SD_peak_values[max_val_index];
+            for (int i = 1; i < SD_peak_values.size(); ++i) {
+                if (SD_peak_values[i] > max_val_found) {
+                    max_val_index = i;
+                }
+            }
+            ajust_once = true;
+            MoveLens(SD_peak_focus[max_val_index]);
+            break;
+        }
+
         if(metadata.isRod==1){
             std::cout<<"[cpp sdk]get rod"<<std::endl;
+            cv::Mat SD_recon = cv::Mat::zeros(ROD_H, ROD_W, CV_32F);
+            cv::Mat SDL(ROD_H, ROD_W, CV_8SC1, metadata.sdl_p);
+            cv::Mat SDR(ROD_H, ROD_W, CV_8SC1, metadata.sdr_p);
+
+            if(init_scan && wait_frame == 0){
+                double threshold = 32.0; 
+                cv::Mat thresholdMask1 = (cv::abs(SDL) > threshold);
+                cv::Mat thresholdMask2 = (cv::abs(SDR) > threshold);
+                int count1 = cv::countNonZero(thresholdMask1);
+                int count2 = cv::countNonZero(thresholdMask2);
+                int SDPeakValue = (count1+count2);
+                SD_peak_values.push_back(SDPeakValue);
+                SD_peak_focus.push_back(now_focus);
+
+                now_focus += SEARCH_STEP;
+                if(now_focus< max_foucus){
+                    MoveLens(now_focus);
+                    printf("\nFocus current address %u\n\n", focusCurrentAddr);
+                    wait_frame = WAIT;
+                }else{
+                    init_scan = false;
+                }
+            }else if(init_scan){
+                wait_frame -= 1;
+            }
+
             if ((i%render_gap) == 0){
-                cv::Mat SD_recon = cv::Mat::zeros(ROD_H, ROD_W, CV_32F);
-                cv::Mat SDL(ROD_H, ROD_W, CV_8SC1, metadata.sdl_p);
-                cv::Mat SDR(ROD_H, ROD_W, CV_8SC1, metadata.sdr_p);
                 tianmouc::isp::SDlSDR_2_SDxSDy(SDL,SDR,Ix,Iy);
                 int itter = 5;//control the blender's diffussion range
                 tianmouc::isp::poisson_blend(SD_recon, Ix, Iy, itter);
@@ -256,3 +325,13 @@ int main(int argc, char* argv[])
     tmCameraUninit(cameraHandle);
     return 0;
 }
+
+
+/*
+	MoveLens(DEFAULT_ZOOM);
+	printf("\nZoom current address = %u\n\n", zoomCurrentAddr);
+	MoveLens(DEFAULT_FOCUS);
+	printf("\nFocus current address %u\n\n", focusCurrentAddr);
+	MoveLens(DEFAULT_IRIS);
+	printf("\nIris current address %u\n\n", irisCurrentAddr);
+*/
